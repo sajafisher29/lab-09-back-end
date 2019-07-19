@@ -23,6 +23,7 @@ app.use(cors());
 app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/events', getEvents);
+app.get('/movies', getMovies);
 
 // Errors!
 function handleError(err, res) {
@@ -30,7 +31,7 @@ function handleError(err, res) {
   if (res) res.status(500).send('Sorry, something went wrong');
 }
 
-// ---------- LOCATION ------------- //
+/* #region Location */
 
 // Route Handler
 function getLocation(request,response) {
@@ -112,8 +113,9 @@ Location.lookupLocation = (handler) => {
     .catch( console.error );
 
 };
+/* #endregion */
 
-// ---------- WEATHER ------------- //
+/* #region Weather */
 
 // Route Handler
 function getWeather(request, response) {
@@ -152,7 +154,6 @@ Weather.prototype.save = function(id) {
 };
 
 // Static Method: Lookup a location in the DB and invoke the proper callback methods based on what you find
-// Question -- is anything in here other than the table name esoteric to weather? Is there an opportunity to DRY this out?
 Weather.lookup = function(handler) {
   const SQL = `SELECT * FROM weathers WHERE location_id=$1;`;
   client.query(SQL, [handler.location.id])
@@ -183,7 +184,9 @@ Weather.fetch = function(location) {
     });
 };
 
-// EVENTS 
+/* #endregion */
+
+/* #region Events */
 
 // Route Handler
 function getEvents(request, response) {
@@ -240,7 +243,7 @@ Event.lookup = function(handler) {
 
 // Static Method: Fetch a location from the weather API
 Event.fetch = function(location) {
-  const url = `https://www.eventbriteapi.com/v3/events/search?location.latitude=${location.latitude}&location.longitude=${location.longitude}&token=${process.env.EVENTBRITE_API_KEY}` 
+  const url = `https://www.eventbriteapi.com/v3/events/search?location.latitude=${location.latitude}&location.longitude=${location.longitude}&token=${process.env.EVENTBRITE_API_KEY}`
   return superagent.get(url)
     .then(result => {
       const eventEntries = result.body.events.map(ev => {
@@ -251,6 +254,92 @@ Event.fetch = function(location) {
       return eventEntries;
     });
 };
+
+/* #endregion */
+
+/* #region Movies */
+
+// Route Handler
+function getMovies(request, response) {
+  console.log(request.query, 'What are you?')
+  const handler = {
+
+    location: request.query.data,
+
+    cacheHit: function(result) {
+      response.send(result.rows);
+    },
+
+    cacheMiss: function() {
+      Movies.fetch(request.query.data)
+        .then( results => response.send(results) )
+        .catch( console.error );
+    },
+  };
+
+  Movies.lookup(handler);
+
+}
+
+// Movies Constructor/Normalizer
+function Movies(results) {
+  this.title = results.title;
+  this.overview = results.overview;
+  this.average_votes = results.vote_average;
+  this.total_votes = results.vote_count;
+  this.image_url = `https://image.tmdb.org/t/p/w500/${results.poster_path}`;
+  this.popularity = results.popularity;
+  this.released_on = results.release_date;
+}
+
+// Instance Method: Save a location to the DB
+Movies.prototype.save = function(id) {
+  const SQL = `INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, released_on) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+  const values = Object.values(this);
+  values.push(id);
+  client.query(SQL, values);
+};
+
+// Static Method: Lookup a location in the DB and invoke the proper callback methods based on what you find
+Movies.lookup = function(handler) {
+  const SQL = `SELECT * FROM movies WHERE location_id=$1;`;
+  client.query(SQL, [handler.location.id])
+    .then(result => {
+      if(result.rowCount > 0) {
+        console.log('Got movie data from SQL');
+        handler.cacheHit(result);
+      } else {
+        console.log('Got movie data from API');
+        handler.cacheMiss();
+      }
+    })
+    .catch(error => handleError(error));
+};
+
+// Static Method: Fetch a location from the movies API
+Movies.fetch = function(query) {
+  const url = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIES_API_KEY}&query=${query}`;
+
+  return superagent.get(url)
+    .then(result => {
+      const moviesInformation = result.body.results.map(movie => {
+        const summary = new Movies(movie);
+        summary.save(query.id);
+        return summary;
+      });
+      return moviesInformation;
+    });
+};
+/* #endregion */
+
+/* #region Yelp Restaurants */
+
+/* #endregion */
+
+/* #region Trails */
+
+/* #endregion */
+
 
 // Make sure the server is listening for requests
 app.listen(PORT, () => console.log(`App is up on ${PORT}`));
