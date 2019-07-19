@@ -261,7 +261,7 @@ Event.fetch = function(location) {
 
 // Route Handler
 function getMovies(request, response) {
-
+  console.log(request.query, 'What are you?')
   const handler = {
 
     location: request.query.data,
@@ -287,14 +287,14 @@ function Movies(results) {
   this.overview = results.overview;
   this.average_votes = results.vote_average;
   this.total_votes = results.vote_count;
-  this.image_url = `https://image.tmdb.org/t/p/w200_and_h300_bestv2/${results.poster_path}`;
+  this.image_url = `https://image.tmdb.org/t/p/w500/${results.poster_path}`;
   this.popularity = results.popularity;
   this.released_on = results.release_date;
 }
 
 // Instance Method: Save a location to the DB
 Movies.prototype.save = function(id) {
-  const SQL = `INSERT INTO movies (titles, overview, average_votes, total_votes, image_url, popularity, released_on) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+  const SQL = `INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, released_on) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
   const values = Object.values(this);
   values.push(id);
   client.query(SQL, values);
